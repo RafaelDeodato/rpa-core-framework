@@ -103,105 +103,39 @@ level = INFO
 directory = logs
 '''
 
-_REQUIREMENTS_TXT = '''\
-# framework base
-rpa-core @ git+https://github.com/RafaelDeodato/rpa-core-framework.git@main
-
-# ferramenta de automação (descomente a necessária)
-# rpa-core[botcity-web] @ git+https://...
-# rpa-core[botcity-core] @ git+https://...
-# rpa-core[selenium] @ git+https://...
-# rpa-core[playwright] @ git+https://...
-
-# testes
-pytest==9.1.1
-'''
-
-_GITIGNORE = '''\
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-logs/
-.pytest_cache/
-'''
-
-_CONFTEST_PY = '''\
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock
-from rpa_core import Settings, LoggerFactory
-
-_INI_BASE = """
-[application]
-environment = development
-
-[automation]
-timeout_seconds = 30
-
-[logging]
-level = INFO
-directory = logs
-"""
-
-
-@pytest.fixture
-def settings(tmp_path) -> Settings:
-    ini = tmp_path / "settings.ini"
-    ini.write_text(_INI_BASE)
-    return Settings.load(ini)
-
-
-@pytest.fixture
-def logger() -> LoggerFactory:
-    return MagicMock(spec=LoggerFactory)
-'''
-
 # --- scaffolding ---
 
 def _criar_arquivo(path: Path, conteudo: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(conteudo, encoding="utf-8")
-    print(f"  criado  {path}")
+    print(f"  criado  {path.name}")
 
 
 def _criar_pasta(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
-    init = path / "__init__.py"
-    if not init.exists():
-        init.write_text("")
-    print(f"  criado  {path}/")
+    (path / "__init__.py").write_text("")
+    print(f"  criado  {path.name}/")
 
 
-def init(nome: str) -> None:
-    root = Path(nome)
+def init() -> None:
+    root = Path.cwd()
 
-    if root.exists():
-        print(f"Erro: o diretório '{nome}' já existe.")
+    arquivos_existentes = [
+        f for f in ["bot.py", "main.py", "settings.ini"]
+        if (root / f).exists()
+    ]
+    if arquivos_existentes:
+        print(f"Erro: já existem arquivos do projeto aqui ({', '.join(arquivos_existentes)}).")
         sys.exit(1)
 
-    print(f"\nCriando projeto '{nome}'...\n")
+    print(f"\nInicializando projeto em '{root.name}'...\n")
 
     _criar_arquivo(root / "bot.py", _BOT_PY)
     _criar_arquivo(root / "main.py", _MAIN_PY)
     _criar_arquivo(root / "settings.ini", _SETTINGS_INI)
-    _criar_arquivo(root / "requirements.txt", _REQUIREMENTS_TXT)
-    _criar_arquivo(root / ".gitignore", _GITIGNORE)
-
     _criar_pasta(root / "services")
     _criar_pasta(root / "workflows")
-    _criar_pasta(root / "tests")
-    _criar_arquivo(root / "tests" / "conftest.py", _CONFTEST_PY)
 
-    print(f"""
-Projeto criado com sucesso!
-
-Próximos passos:
-  cd {nome}
-  pip install -r requirements.txt
-  python main.py <workflow>
-""")
+    print("\nPronto. Adicione seus workflows em workflows/ e registre em main.py.")
 
 
 # --- entry point ---
@@ -213,12 +147,11 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="comando")
 
-    init_parser = subparsers.add_parser("init", help="Cria a estrutura base de um novo projeto")
-    init_parser.add_argument("nome", help="Nome do projeto / pasta a criar")
+    subparsers.add_parser("init", help="Inicializa a estrutura base no diretório atual")
 
     args = parser.parse_args()
 
     if args.comando == "init":
-        init(args.nome)
+        init()
     else:
         parser.print_help()

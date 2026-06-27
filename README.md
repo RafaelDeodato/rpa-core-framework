@@ -42,30 +42,28 @@ rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.
 
 ---
 
-## CLI — Criar um novo projeto
+## CLI — Inicializar um projeto
 
-Após instalar o `rpa-core`, o comando `rpa-core` fica disponível no terminal:
+Crie a pasta do projeto, instale o `rpa-core` e rode:
 
 ```bash
-rpa-core init minha-automacao
+mkdir minha-automacao
+cd minha-automacao
+pip install "rpa-core @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
+rpa-core init
 ```
 
-Isso cria a seguinte estrutura pronta para uso:
+O comando cria no diretório atual:
 
 ```
 minha-automacao/
-├── bot.py           # Entry point do BotCity Runner (Maestro)
-├── main.py          # Entry point local e Docker
-├── settings.ini     # Configurações base
-├── requirements.txt # Dependências comentadas para escolha da ferramenta
-├── .gitignore
+├── bot.py        # Entry point do BotCity Runner (Maestro)
+├── main.py       # Entry point local e Docker
+├── settings.ini  # Configurações base
 ├── services/
 │   └── __init__.py
-├── workflows/
-│   └── __init__.py
-└── tests/
-    ├── __init__.py
-    └── conftest.py
+└── workflows/
+    └── __init__.py
 ```
 
 ---
