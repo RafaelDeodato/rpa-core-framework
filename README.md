@@ -58,6 +58,7 @@ Cria no diretório atual:
 minha-automacao/
 ├── bot.py        # Entry point do BotCity Maestro
 ├── main.py       # Entry point local e Docker
+├── settings.py   # Dataclass Settings do projeto (editável)
 ├── settings.ini  # Configurações base
 ├── services/
 │   └── __init__.py
@@ -84,7 +85,23 @@ workflows/
 
 Para adicionar mais workflows, basta rodar o comando novamente — os registros acumulam no `main.py` e o `bot.py` não é alterado.
 
-### 3. Trocar o workflow do bot
+### 3. Adicionar uma configuração
+
+```bash
+rpa-core add-setting <secao> <chave> <tipo> <valor_padrao>
+```
+
+Adiciona o campo em `settings.ini` **e** no dataclass `Settings` em `settings.py`, mantendo os dois em sincronia:
+
+```bash
+rpa-core add-setting automation max_retries int 3
+rpa-core add-setting application base_url str https://api.exemplo.com
+rpa-core add-setting automation headless bool false
+```
+
+Tipos disponíveis: `str`, `int`, `float`, `bool`, `path`
+
+### 4. Trocar o workflow do bot
 
 ```bash
 rpa-core set-bot-workflow orquestrador

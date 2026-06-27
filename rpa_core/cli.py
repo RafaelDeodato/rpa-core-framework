@@ -57,7 +57,8 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from botcity.maestro import BotMaestroSDK
-from rpa_core import Settings, LoggerFactory, MaestroLogService, ProcessRunner
+from settings import Settings
+from rpa_core import LoggerFactory, MaestroLogService, ProcessRunner
 
 # [rpa-core] imports dos workflows
 WORKFLOWS = {
@@ -92,6 +93,44 @@ if __name__ == "__main__":
     main()
 '''
 
+_SETTINGS_PY = '''\
+from __future__ import annotations
+
+from configparser import ConfigParser, Error as ConfigParserError
+from dataclasses import dataclass
+from pathlib import Path
+
+DEFAULT_SETTINGS_PATH = Path(__file__).parent / "settings.ini"
+
+
+@dataclass(frozen=True)
+class Settings:
+    environment: str
+    timeout_seconds: int
+    log_level: str
+    log_directory: Path
+    # [rpa-core] campos adicionais
+
+    @classmethod
+    def load(cls, path: str | Path | None = None) -> "Settings":
+        settings_path = Path(path) if path else DEFAULT_SETTINGS_PATH
+        if not settings_path.is_file():
+            raise FileNotFoundError(f"settings.ini não encontrado em: {settings_path}")
+        parser = ConfigParser()
+        if not parser.read(settings_path, encoding="utf-8"):
+            raise ValueError(f"Não foi possível ler: {settings_path}")
+        try:
+            return cls(
+                environment=parser.get("application", "environment"),
+                timeout_seconds=parser.getint("automation", "timeout_seconds"),
+                log_level=parser.get("logging", "level").upper(),
+                log_directory=Path(parser.get("logging", "directory")),
+                # [rpa-core] leitura dos campos adicionais
+            )
+        except (ConfigParserError, KeyError, ValueError) as exc:
+            raise ValueError(f"Erro ao carregar settings.ini: {exc}") from exc
+'''
+
 _SETTINGS_INI = '''\
 [application]
 environment = development
@@ -105,7 +144,8 @@ directory = logs
 '''
 
 _WORKFLOW_PY = '''\
-from rpa_core import Settings, LoggerFactory
+from rpa_core import LoggerFactory
+from settings import Settings
 
 
 class {classe}:
@@ -117,6 +157,24 @@ class {classe}:
         pass
 '''
 
+# --- tipos suportados para add-setting ---
+
+_TIPO_PY = {
+    "str":   "str",
+    "int":   "int",
+    "float": "float",
+    "bool":  "bool",
+    "path":  "Path",
+}
+
+_PARSER_CALL = {
+    "str":   lambda s, k: f'parser.get("{s}", "{k}")',
+    "int":   lambda s, k: f'parser.getint("{s}", "{k}")',
+    "float": lambda s, k: f'parser.getfloat("{s}", "{k}")',
+    "bool":  lambda s, k: f'parser.getboolean("{s}", "{k}")',
+    "path":  lambda s, k: f'Path(parser.get("{s}", "{k}"))',
+}
+
 # --- helpers ---
 
 def _snake_to_pascal(nome: str) -> str:
@@ -125,11 +183,9 @@ def _snake_to_pascal(nome: str) -> str:
 
 def _validar_nome(nome: str) -> None:
     if not re.match(r'^[a-z][a-z0-9_]*$', nome):
-        print("Erro: o nome deve estar em snake_case (ex: extrator_nfe, portal_xyz).")
+        print("Erro: o nome deve estar em snake_case (ex: extrator_nfe, max_retries).")
         sys.exit(1)
 
-
-# --- scaffolding ---
 
 def _criar_arquivo(path: Path, conteudo: str) -> None:
     path.write_text(conteudo, encoding="utf-8")
@@ -142,10 +198,12 @@ def _criar_pasta(path: Path) -> None:
     print(f"  criado  {path.relative_to(Path.cwd())}/")
 
 
+# --- comandos ---
+
 def init() -> None:
     root = Path.cwd()
 
-    existentes = [f for f in ["bot.py", "main.py", "settings.ini"] if (root / f).exists()]
+    existentes = [f for f in ["bot.py", "main.py", "settings.ini", "settings.py"] if (root / f).exists()]
     if existentes:
         print(f"Erro: já existem arquivos do projeto aqui ({', '.join(existentes)}).")
         sys.exit(1)
@@ -154,6 +212,7 @@ def init() -> None:
 
     _criar_arquivo(root / "bot.py", _BOT_PY)
     _criar_arquivo(root / "main.py", _MAIN_PY)
+    _criar_arquivo(root / "settings.py", _SETTINGS_PY)
     _criar_arquivo(root / "settings.ini", _SETTINGS_INI)
     _criar_pasta(root / "services")
     _criar_pasta(root / "workflows")
@@ -186,25 +245,20 @@ def new_workflow(nome: str) -> None:
     _criar_pasta(workflow_dir / "tasks")
     _criar_arquivo(workflow_dir / f"{nome}.py", _WORKFLOW_PY.format(classe=classe))
 
-    # Atualiza main.py
     main_content = main_py.read_text(encoding="utf-8")
-
     import_line = f"from workflows.{nome}.{nome} import {classe}"
     main_content = main_content.replace(
         "# [rpa-core] imports dos workflows\n",
         f"# [rpa-core] imports dos workflows\n{import_line}\n",
     )
-
     entry_line = f'    "{nome}": {classe},\n'
     main_content = main_content.replace(
         "    # [rpa-core] registro dos workflows\n",
         f"    # [rpa-core] registro dos workflows\n{entry_line}",
     )
-
     main_py.write_text(main_content, encoding="utf-8")
     print(f"  atualizado  main.py")
 
-    # Atualiza WORKFLOW_NAME no bot.py apenas se ainda estiver vazio
     bot_content = bot_py.read_text(encoding="utf-8")
     if 'WORKFLOW_NAME = ""' in bot_content:
         bot_content = bot_content.replace('WORKFLOW_NAME = ""', f'WORKFLOW_NAME = "{nome}"')
@@ -214,7 +268,7 @@ def new_workflow(nome: str) -> None:
     print(f"\nWorkflow '{nome}' criado. Implemente execute() em workflows/{nome}/{nome}.py")
 
 
-def set_workflow(nome: str) -> None:
+def set_bot_workflow(nome: str) -> None:
     root = Path.cwd()
     bot_py = root / "bot.py"
 
@@ -234,6 +288,71 @@ def set_workflow(nome: str) -> None:
     print(f"bot.py atualizado: WORKFLOW_NAME = \"{nome}\"")
 
 
+def add_setting(secao: str, chave: str, tipo: str, valor: str) -> None:
+    _validar_nome(chave)
+
+    if tipo not in _TIPO_PY:
+        print(f"Erro: tipo '{tipo}' inválido. Use: {', '.join(_TIPO_PY)}")
+        sys.exit(1)
+
+    root = Path.cwd()
+    settings_ini = root / "settings.ini"
+    settings_py = root / "settings.py"
+
+    if not settings_ini.exists() or not settings_py.exists():
+        print("Erro: settings.ini/settings.py não encontrados. Execute 'rpa-core init' primeiro.")
+        sys.exit(1)
+
+    py_content = settings_py.read_text(encoding="utf-8")
+    if re.search(rf'^\s+{chave}:', py_content, re.MULTILINE):
+        print(f"Erro: campo '{chave}' já existe em settings.py.")
+        sys.exit(1)
+
+    # Atualiza settings.ini — insere na seção correta preservando o resto do arquivo
+    ini_lines = settings_ini.read_text(encoding="utf-8").splitlines(keepends=True)
+    result: list[str] = []
+    in_section = False
+    inserted = False
+
+    for line in ini_lines:
+        stripped = line.strip()
+        if stripped == f"[{secao}]":
+            in_section = True
+        elif stripped.startswith("[") and in_section:
+            result.append(f"{chave} = {valor}\n")
+            inserted = True
+            in_section = False
+        result.append(line)
+
+    if in_section and not inserted:
+        result.append(f"{chave} = {valor}\n")
+        inserted = True
+
+    if not inserted:
+        result.append(f"\n[{secao}]\n{chave} = {valor}\n")
+
+    settings_ini.write_text("".join(result), encoding="utf-8")
+    print(f"  atualizado  settings.ini — [{secao}] {chave} = {valor}")
+
+    # Atualiza settings.py — adiciona campo no dataclass e leitura no load()
+    tipo_py = _TIPO_PY[tipo]
+    campo = f"    {chave}: {tipo_py}\n"
+    py_content = py_content.replace(
+        "    # [rpa-core] campos adicionais\n",
+        f"{campo}    # [rpa-core] campos adicionais\n",
+    )
+
+    parser_call = _PARSER_CALL[tipo](secao, chave)
+    leitura = f"                {chave}={parser_call},\n"
+    py_content = py_content.replace(
+        "                # [rpa-core] leitura dos campos adicionais\n",
+        f"{leitura}                # [rpa-core] leitura dos campos adicionais\n",
+    )
+
+    settings_py.write_text(py_content, encoding="utf-8")
+    print(f"  atualizado  settings.py — {chave}: {tipo_py}")
+
+
 # --- entry point ---
 
 def main() -> None:
@@ -251,6 +370,12 @@ def main() -> None:
     sw = subparsers.add_parser("set-bot-workflow", help="Define qual workflow o bot.py executa")
     sw.add_argument("nome", help="Nome do workflow")
 
+    as_ = subparsers.add_parser("add-setting", help="Adiciona um campo ao settings.ini e settings.py")
+    as_.add_argument("secao", help="Seção do settings.ini (ex: application, automation)")
+    as_.add_argument("chave", help="Nome da chave em snake_case (ex: max_retries)")
+    as_.add_argument("tipo", choices=list(_TIPO_PY), help="Tipo Python do campo: str, int, float, bool, path")
+    as_.add_argument("valor", help="Valor padrão no settings.ini")
+
     args = parser.parse_args()
 
     if args.comando == "init":
@@ -258,6 +383,8 @@ def main() -> None:
     elif args.comando == "new-workflow":
         new_workflow(args.nome)
     elif args.comando == "set-bot-workflow":
-        set_workflow(args.nome)
+        set_bot_workflow(args.nome)
+    elif args.comando == "add-setting":
+        add_setting(args.secao, args.chave, args.tipo, args.valor)
     else:
         parser.print_help()
