@@ -142,6 +142,7 @@ O argumento precisa estar registrado no dict `WORKFLOWS` do `main.py`.
 minha-automacao/
 ├── bot.py
 ├── main.py
+├── settings.py
 ├── settings.ini
 ├── requirements.txt
 ├── services/
