@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 from botcity.maestro import AutomationTaskFinishStatus, BotMaestroSDK
 from main import main
 
-WORKFLOW_NAME = "meu_workflow"
+WORKFLOW_NAME = ""
 
 
 def bot_main() -> None:
@@ -58,9 +59,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 from botcity.maestro import BotMaestroSDK
 from rpa_core import Settings, LoggerFactory, MaestroLogService, ProcessRunner
 
-# Importe e registre os workflows do projeto aqui
+# [rpa-core] imports dos workflows
 WORKFLOWS = {
-    # "meu_workflow": MeuWorkflow,
+    # [rpa-core] registro dos workflows
 }
 
 
@@ -103,28 +104,50 @@ level = INFO
 directory = logs
 '''
 
+_WORKFLOW_PY = '''\
+from rpa_core import Settings, LoggerFactory
+
+
+class {classe}:
+    def __init__(self, logger: LoggerFactory, settings: Settings) -> None:
+        self._logger = logger
+        self._settings = settings
+
+    def execute(self) -> None:
+        pass
+'''
+
+# --- helpers ---
+
+def _snake_to_pascal(nome: str) -> str:
+    return "".join(part.capitalize() for part in nome.split("_"))
+
+
+def _validar_nome(nome: str) -> None:
+    if not re.match(r'^[a-z][a-z0-9_]*$', nome):
+        print("Erro: o nome deve estar em snake_case (ex: extrator_nfe, portal_xyz).")
+        sys.exit(1)
+
+
 # --- scaffolding ---
 
 def _criar_arquivo(path: Path, conteudo: str) -> None:
     path.write_text(conteudo, encoding="utf-8")
-    print(f"  criado  {path.name}")
+    print(f"  criado  {path.relative_to(Path.cwd())}")
 
 
 def _criar_pasta(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     (path / "__init__.py").write_text("")
-    print(f"  criado  {path.name}/")
+    print(f"  criado  {path.relative_to(Path.cwd())}/")
 
 
 def init() -> None:
     root = Path.cwd()
 
-    arquivos_existentes = [
-        f for f in ["bot.py", "main.py", "settings.ini"]
-        if (root / f).exists()
-    ]
-    if arquivos_existentes:
-        print(f"Erro: já existem arquivos do projeto aqui ({', '.join(arquivos_existentes)}).")
+    existentes = [f for f in ["bot.py", "main.py", "settings.ini"] if (root / f).exists()]
+    if existentes:
+        print(f"Erro: já existem arquivos do projeto aqui ({', '.join(existentes)}).")
         sys.exit(1)
 
     print(f"\nInicializando projeto em '{root.name}'...\n")
@@ -135,7 +158,59 @@ def init() -> None:
     _criar_pasta(root / "services")
     _criar_pasta(root / "workflows")
 
-    print("\nPronto. Adicione seus workflows em workflows/ e registre em main.py.")
+    print("\nPronto. Use 'rpa-core new-workflow <nome>' para criar o primeiro workflow.")
+
+
+def new_workflow(nome: str) -> None:
+    _validar_nome(nome)
+
+    root = Path.cwd()
+    main_py = root / "main.py"
+    bot_py = root / "bot.py"
+
+    if not main_py.exists():
+        print("Erro: main.py não encontrado. Execute 'rpa-core init' primeiro.")
+        sys.exit(1)
+
+    workflow_dir = root / "workflows" / nome
+    if workflow_dir.exists():
+        print(f"Erro: workflow '{nome}' já existe.")
+        sys.exit(1)
+
+    classe = _snake_to_pascal(nome)
+
+    print(f"\nCriando workflow '{nome}'...\n")
+
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "__init__.py").write_text("")
+    _criar_pasta(workflow_dir / "tasks")
+    _criar_arquivo(workflow_dir / f"{nome}.py", _WORKFLOW_PY.format(classe=classe))
+
+    # Atualiza main.py
+    main_content = main_py.read_text(encoding="utf-8")
+
+    import_line = f"from workflows.{nome}.{nome} import {classe}"
+    main_content = main_content.replace(
+        "# [rpa-core] imports dos workflows\n",
+        f"# [rpa-core] imports dos workflows\n{import_line}\n",
+    )
+
+    entry_line = f'    "{nome}": {classe},\n'
+    main_content = main_content.replace(
+        "    # [rpa-core] registro dos workflows\n",
+        f"    # [rpa-core] registro dos workflows\n{entry_line}",
+    )
+
+    main_py.write_text(main_content, encoding="utf-8")
+    print(f"  atualizado  main.py")
+
+    # Atualiza WORKFLOW_NAME no bot.py
+    bot_content = bot_py.read_text(encoding="utf-8")
+    bot_content = re.sub(r'WORKFLOW_NAME\s*=\s*"[^"]*"', f'WORKFLOW_NAME = "{nome}"', bot_content)
+    bot_py.write_text(bot_content, encoding="utf-8")
+    print(f"  atualizado  bot.py")
+
+    print(f"\nWorkflow '{nome}' criado. Implemente execute() em workflows/{nome}/{nome}.py")
 
 
 # --- entry point ---
@@ -149,9 +224,14 @@ def main() -> None:
 
     subparsers.add_parser("init", help="Inicializa a estrutura base no diretório atual")
 
+    nw = subparsers.add_parser("new-workflow", help="Cria um novo workflow e registra no main.py")
+    nw.add_argument("nome", help="Nome do workflow em snake_case (ex: extrator_nfe)")
+
     args = parser.parse_args()
 
     if args.comando == "init":
         init()
+    elif args.comando == "new-workflow":
+        new_workflow(args.nome)
     else:
         parser.print_help()

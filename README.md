@@ -66,6 +66,25 @@ minha-automacao/
     └── __init__.py
 ```
 
+### Criar um workflow
+
+```bash
+rpa-core new-workflow extrator_nfe
+```
+
+Cria a estrutura do workflow e **atualiza automaticamente** `main.py` (import + registro no `WORKFLOWS`) e `bot.py` (`WORKFLOW_NAME`):
+
+```
+workflows/
+└── extrator_nfe/
+    ├── __init__.py
+    ├── extrator_nfe.py   # classe ExtratorNfe com execute()
+    └── tasks/
+        └── __init__.py
+```
+
+Para adicionar um segundo workflow, basta rodar o comando novamente — `main.py` acumula os registros e `bot.py` é atualizado para o novo nome.
+
 ---
 
 ## Componentes
