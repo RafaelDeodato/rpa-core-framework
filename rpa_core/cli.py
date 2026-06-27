@@ -204,13 +204,34 @@ def new_workflow(nome: str) -> None:
     main_py.write_text(main_content, encoding="utf-8")
     print(f"  atualizado  main.py")
 
-    # Atualiza WORKFLOW_NAME no bot.py
+    # Atualiza WORKFLOW_NAME no bot.py apenas se ainda estiver vazio
+    bot_content = bot_py.read_text(encoding="utf-8")
+    if 'WORKFLOW_NAME = ""' in bot_content:
+        bot_content = bot_content.replace('WORKFLOW_NAME = ""', f'WORKFLOW_NAME = "{nome}"')
+        bot_py.write_text(bot_content, encoding="utf-8")
+        print(f"  atualizado  bot.py")
+
+    print(f"\nWorkflow '{nome}' criado. Implemente execute() em workflows/{nome}/{nome}.py")
+
+
+def set_workflow(nome: str) -> None:
+    root = Path.cwd()
+    bot_py = root / "bot.py"
+
+    if not bot_py.exists():
+        print("Erro: bot.py não encontrado. Execute 'rpa-core init' primeiro.")
+        sys.exit(1)
+
+    workflow_dir = root / "workflows" / nome
+    if not workflow_dir.exists():
+        print(f"Erro: workflow '{nome}' não existe. Use 'rpa-core new-workflow {nome}' para criá-lo.")
+        sys.exit(1)
+
     bot_content = bot_py.read_text(encoding="utf-8")
     bot_content = re.sub(r'WORKFLOW_NAME\s*=\s*"[^"]*"', f'WORKFLOW_NAME = "{nome}"', bot_content)
     bot_py.write_text(bot_content, encoding="utf-8")
-    print(f"  atualizado  bot.py")
 
-    print(f"\nWorkflow '{nome}' criado. Implemente execute() em workflows/{nome}/{nome}.py")
+    print(f"bot.py atualizado: WORKFLOW_NAME = \"{nome}\"")
 
 
 # --- entry point ---
@@ -227,11 +248,16 @@ def main() -> None:
     nw = subparsers.add_parser("new-workflow", help="Cria um novo workflow e registra no main.py")
     nw.add_argument("nome", help="Nome do workflow em snake_case (ex: extrator_nfe)")
 
+    sw = subparsers.add_parser("set-bot-workflow", help="Define qual workflow o bot.py executa")
+    sw.add_argument("nome", help="Nome do workflow")
+
     args = parser.parse_args()
 
     if args.comando == "init":
         init()
     elif args.comando == "new-workflow":
         new_workflow(args.nome)
+    elif args.comando == "set-bot-workflow":
+        set_workflow(args.nome)
     else:
         parser.print_help()

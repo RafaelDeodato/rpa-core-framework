@@ -83,7 +83,15 @@ workflows/
         └── __init__.py
 ```
 
-Para adicionar um segundo workflow, basta rodar o comando novamente — `main.py` acumula os registros e `bot.py` é atualizado para o novo nome.
+Para adicionar mais workflows, basta rodar o comando novamente — os registros acumulam no `main.py`. O `bot.py` só é atualizado automaticamente no primeiro workflow criado.
+
+### Trocar o workflow do bot
+
+```bash
+rpa-core set-bot-workflow orquestrador
+```
+
+Atualiza o `WORKFLOW_NAME` no `bot.py`. Útil quando o projeto cresce e um workflow passa a orquestrar os demais.
 
 ---
 
