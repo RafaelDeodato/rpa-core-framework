@@ -26,11 +26,11 @@ def test_run_propaga_excecao(logger):
         runner.run(workflow)
 
 
-def test_run_loga_erro_no_maestro(logger):
-    maestro_logger = MagicMock()
+def test_run_loga_erro_no_orchestrator(logger):
+    orchestrator_logger = MagicMock()
     workflow = MagicMock()
     workflow.execute.side_effect = RuntimeError("falha")
-    runner = ProcessRunner(logger=logger, maestro_logger=maestro_logger)
+    runner = ProcessRunner(logger=logger, orchestrator_logger=orchestrator_logger)
     with pytest.raises(RuntimeError):
         runner.run(workflow)
-    maestro_logger.error.assert_called_once()
+    orchestrator_logger.error.assert_called_once()

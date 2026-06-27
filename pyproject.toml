@@ -6,11 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "rpa-core"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = [
-    "botcity-maestro-sdk==0.9.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
+maestro      = ["botcity-maestro-sdk==0.9.0"]
 botcity-web  = ["botcity-framework-web==1.1.0"]
 botcity-core = ["botcity-framework-core==1.1.0"]
 selenium     = ["selenium>=4.0"]

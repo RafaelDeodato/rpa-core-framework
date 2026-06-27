@@ -33,3 +33,11 @@ def test_playwright_service_sem_dependencia(monkeypatch):
     from rpa_core.services.playwright_service import PlaywrightService
     with pytest.raises(ImportError, match="rpa-core\\[playwright\\]"):
         PlaywrightService(timeout_seconds=30, logger=MagicMock(spec=LoggerFactory))
+
+
+def test_maestro_log_service_sem_dependencia(monkeypatch):
+    import rpa_core.maestro_log_service as m
+    monkeypatch.setattr(m, "_DISPONIVEL", False)
+    from rpa_core.maestro_log_service import MaestroLogService
+    with pytest.raises(ImportError, match="rpa-core\\[maestro\\]"):
+        MaestroLogService(maestro=MagicMock(), process_name="test")

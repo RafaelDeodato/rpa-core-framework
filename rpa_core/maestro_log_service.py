@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from botcity.maestro import BotMaestroSDK
+try:
+    from botcity.maestro import BotMaestroSDK
+    _DISPONIVEL = True
+except ImportError:
+    _DISPONIVEL = False
 
 
 class MaestroLogService:
-    """Envia logs estruturados ao BotCity Maestro Orchestrator."""
+    """Envia logs estruturados ao BotCity Maestro Orchestrator.
 
-    def __init__(self, maestro: BotMaestroSDK, process_name: str) -> None:
+    Requer: pip install 'rpa-core[maestro]'
+    """
+
+    def __init__(self, maestro, process_name: str) -> None:
+        if not _DISPONIVEL:
+            raise ImportError(
+                "botcity-maestro-sdk não instalado. "
+                "Execute: pip install 'rpa-core[maestro]'"
+            )
         self._maestro = maestro
         self._process_name = process_name
         self._log_created = False

@@ -51,7 +51,42 @@ if __name__ == "__main__":
     bot_main()
 '''
 
-_MAIN_PY = '''\
+_MAIN_PY_NONE = '''\
+import argparse
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+from settings import Settings
+from rpa_core import LoggerFactory, ProcessRunner
+
+# [rpa-core] imports dos workflows
+WORKFLOWS = {
+    # [rpa-core] registro dos workflows
+}
+
+
+def main(workflow_name: str | None = None) -> None:
+    if workflow_name is None:
+        parser = argparse.ArgumentParser(description="Executor de workflows RPA")
+        parser.add_argument("workflow", choices=list(WORKFLOWS.keys()), help="Nome do workflow")
+        workflow_name = parser.parse_args().workflow
+
+    settings = Settings.load()
+    logger = LoggerFactory(log_directory=settings.log_directory)
+
+    workflow = WORKFLOWS[workflow_name](
+        logger=logger,
+        settings=settings,
+    )
+
+    ProcessRunner(logger=logger).run(workflow)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+_MAIN_PY_MAESTRO = '''\
 import argparse
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -79,14 +114,14 @@ def main(workflow_name: str | None = None, maestro: BotMaestroSDK | None = None)
         BotMaestroSDK.RAISE_NOT_CONNECTED = False
         maestro = BotMaestroSDK.from_sys_args()
 
-    maestro_logger = MaestroLogService(maestro=maestro, process_name=workflow_name)
+    orchestrator_logger = MaestroLogService(maestro=maestro, process_name=workflow_name)
 
     workflow = WORKFLOWS[workflow_name](
         logger=logger,
         settings=settings,
     )
 
-    ProcessRunner(logger=logger, maestro_logger=maestro_logger).run(workflow)
+    ProcessRunner(logger=logger, orchestrator_logger=orchestrator_logger).run(workflow)
 
 
 if __name__ == "__main__":
@@ -200,7 +235,7 @@ def _criar_pasta(path: Path) -> None:
 
 # --- comandos ---
 
-def init() -> None:
+def init(orchestrator: str = "none") -> None:
     root = Path.cwd()
 
     existentes = [f for f in ["bot.py", "main.py", "settings.ini", "settings.py"] if (root / f).exists()]
@@ -210,8 +245,12 @@ def init() -> None:
 
     print(f"\nInicializando projeto em '{root.name}'...\n")
 
-    _criar_arquivo(root / "bot.py", _BOT_PY)
-    _criar_arquivo(root / "main.py", _MAIN_PY)
+    main_template = _MAIN_PY_MAESTRO if orchestrator == "maestro" else _MAIN_PY_NONE
+
+    if orchestrator == "maestro":
+        _criar_arquivo(root / "bot.py", _BOT_PY)
+
+    _criar_arquivo(root / "main.py", main_template)
     _criar_arquivo(root / "settings.py", _SETTINGS_PY)
     _criar_arquivo(root / "settings.ini", _SETTINGS_INI)
     _criar_pasta(root / "services")
@@ -259,11 +298,12 @@ def new_workflow(nome: str) -> None:
     main_py.write_text(main_content, encoding="utf-8")
     print(f"  atualizado  main.py")
 
-    bot_content = bot_py.read_text(encoding="utf-8")
-    if 'WORKFLOW_NAME = ""' in bot_content:
-        bot_content = bot_content.replace('WORKFLOW_NAME = ""', f'WORKFLOW_NAME = "{nome}"')
-        bot_py.write_text(bot_content, encoding="utf-8")
-        print(f"  atualizado  bot.py")
+    if bot_py.exists():
+        bot_content = bot_py.read_text(encoding="utf-8")
+        if 'WORKFLOW_NAME = ""' in bot_content:
+            bot_content = bot_content.replace('WORKFLOW_NAME = ""', f'WORKFLOW_NAME = "{nome}"')
+            bot_py.write_text(bot_content, encoding="utf-8")
+            print(f"  atualizado  bot.py")
 
     print(f"\nWorkflow '{nome}' criado. Implemente execute() em workflows/{nome}/{nome}.py")
 
@@ -273,7 +313,11 @@ def set_bot_workflow(nome: str) -> None:
     bot_py = root / "bot.py"
 
     if not bot_py.exists():
-        print("Erro: bot.py não encontrado. Execute 'rpa-core init' primeiro.")
+        print(
+            "Erro: bot.py não encontrado. "
+            "Este projeto foi criado sem orquestrador. "
+            "Use 'rpa-core init --orchestrator maestro' para projetos com BotCity Maestro."
+        )
         sys.exit(1)
 
     workflow_dir = root / "workflows" / nome
@@ -308,33 +352,48 @@ def add_setting(secao: str, chave: str, tipo: str, valor: str) -> None:
         print(f"Erro: campo '{chave}' já existe em settings.py.")
         sys.exit(1)
 
-    # Atualiza settings.ini — insere na seção correta preservando o resto do arquivo
+    # Atualiza settings.ini preservando formatação e linhas em branco entre seções
     ini_lines = settings_ini.read_text(encoding="utf-8").splitlines(keepends=True)
     result: list[str] = []
     in_section = False
     inserted = False
+    pending_blanks: list[str] = []
 
     for line in ini_lines:
         stripped = line.strip()
         if stripped == f"[{secao}]":
             in_section = True
+            result.extend(pending_blanks)
+            pending_blanks = []
+            result.append(line)
         elif stripped.startswith("[") and in_section:
+            # Insere a nova chave antes das linhas em branco que precedem a próxima seção
             result.append(f"{chave} = {valor}\n")
             inserted = True
             in_section = False
-        result.append(line)
+            result.extend(pending_blanks)
+            pending_blanks = []
+            result.append(line)
+        elif stripped == "" and in_section:
+            pending_blanks.append(line)
+        else:
+            result.extend(pending_blanks)
+            pending_blanks = []
+            result.append(line)
 
     if in_section and not inserted:
         result.append(f"{chave} = {valor}\n")
+        result.extend(pending_blanks)
         inserted = True
 
     if not inserted:
+        result.extend(pending_blanks)
         result.append(f"\n[{secao}]\n{chave} = {valor}\n")
 
     settings_ini.write_text("".join(result), encoding="utf-8")
     print(f"  atualizado  settings.ini — [{secao}] {chave} = {valor}")
 
-    # Atualiza settings.py — adiciona campo no dataclass e leitura no load()
+    # Atualiza settings.py
     tipo_py = _TIPO_PY[tipo]
     campo = f"    {chave}: {tipo_py}\n"
     py_content = py_content.replace(
@@ -362,7 +421,13 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="comando")
 
-    subparsers.add_parser("init", help="Inicializa a estrutura base no diretório atual")
+    init_p = subparsers.add_parser("init", help="Inicializa a estrutura base no diretório atual")
+    init_p.add_argument(
+        "--orchestrator",
+        choices=["none", "maestro"],
+        default="none",
+        help="Orquestrador a integrar (default: none)",
+    )
 
     nw = subparsers.add_parser("new-workflow", help="Cria um novo workflow e registra no main.py")
     nw.add_argument("nome", help="Nome do workflow em snake_case (ex: extrator_nfe)")
@@ -379,7 +444,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.comando == "init":
-        init()
+        init(orchestrator=args.orchestrator)
     elif args.comando == "new-workflow":
         new_workflow(args.nome)
     elif args.comando == "set-bot-workflow":
