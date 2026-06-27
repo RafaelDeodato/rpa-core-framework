@@ -16,6 +16,9 @@ botcity-core = ["botcity-framework-core==1.1.0"]
 selenium     = ["selenium>=4.0"]
 playwright   = ["playwright>=1.40"]
 
+[project.scripts]
+rpa-core = "rpa_core.cli:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
