@@ -1,181 +1,94 @@
-# rpa-core-framework
+# rpa-core
 
-Framework interno de RPA em Python — configuração, logging, integração opcional com BotCity Maestro e services para BotCity Web/Core, Selenium e Playwright.
+Framework Python para projetos de automação RPA. Fornece a infraestrutura comum a qualquer automação — configuração, logging e ciclo de vida de execução — para que cada projeto foque só na lógica da automação em si.
+
+A ferramenta de automação (BotCity, Selenium, Playwright) e o orquestrador (BotCity Maestro) são **opcionais**: cada projeto instala apenas o que precisa.
+
+## Sumário
+
+- [Requisitos](#requisitos)
+- [Instalação](#instalação)
+  - [Em um projeto real (requirements.txt)](#em-um-projeto-real-requirementstxt)
+- [Quickstart](#quickstart)
+- [Estrutura de um projeto gerado](#estrutura-de-um-projeto-gerado)
+- [Comandos da CLI](#comandos-da-cli)
+- [Executando](#executando)
+- [Conceitos centrais](#conceitos-centrais)
+  - [Settings](#settings)
+  - [LoggerFactory](#loggerfactory)
+  - [ProcessRunner](#processrunner)
+- [Orquestrador (opcional)](#orquestrador-opcional)
+- [Services de automação](#services-de-automação)
+- [Testes](#testes)
 
 ---
 
-## O que é
+## Requisitos
 
-`rpa-core` é um framework Python para projetos de automação RPA. Ele fornece a infraestrutura comum que toda automação precisa — configuração, logging e ciclo de vida de execução — para que cada projeto foque apenas na lógica da automação em si.
-
-O orquestrador (BotCity Maestro) e as ferramentas de automação (BotCity Web, Selenium, Playwright, etc.) são **opcionais**: cada projeto instala apenas o que precisa via extras.
-
----
+Python 3.10+
 
 ## Instalação
 
 ```bash
-# Apenas a base (sem orquestrador, sem ferramenta de automação)
-pip install "rpa-core @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Com BotCity Maestro (orquestrador)
-pip install "rpa-core[maestro] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Com BotCity Web (automação de browser)
 pip install "rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Com Selenium
-pip install "rpa-core[selenium] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Com Playwright
-pip install "rpa-core[playwright] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Com BotCity Core (automação desktop)
-pip install "rpa-core[botcity-core] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
-
-# Combinando extras
-pip install "rpa-core[maestro,botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
 ```
 
-No `requirements.txt` do projeto:
+Troque `botcity-web` pelo extra correspondente à ferramenta que o projeto usa, ou combine mais de um separando por vírgula (`rpa-core[botcity-web,maestro]`):
+
+| Extra | Instala | Uso |
+|---|---|---|
+| `botcity-web` | `botcity-framework-web` | Automação de browser via BotCity WebBot |
+| `botcity-core` | `botcity-framework-core` | Automação desktop via BotCity DesktopBot |
+| `selenium` | `selenium` | Automação de browser via Selenium WebDriver |
+| `playwright` | `playwright` | Automação de browser via Playwright |
+| `maestro` | `botcity-maestro-sdk` | Integração com BotCity Maestro Orchestrator |
+
+Sem nenhum extra, o `rpa-core` instala só a base (configuração, logging, ciclo de vida) — útil quando a automação não usa browser/desktop nem orquestrador.
+
+### Em um projeto real (`requirements.txt`)
+
+O `pip install` direto é prático para testar rapidamente, mas em qualquer projeto que vá pra produção ou rodar em Docker/CI, declare a dependência no `requirements.txt` junto com as demais bibliotecas que a automação precisar — pandas, openpyxl, SQLAlchemy, drivers de banco, etc.:
 
 ```
-rpa-core[maestro,botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git
+rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git
+pandas
+openpyxl
+sqlalchemy
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+Isso garante que qualquer ambiente — sua máquina, um container Docker, um pipeline de CI — instala exatamente o mesmo conjunto de dependências, em vez de depender de comandos rodados manualmente.
+
+Para travar numa versão específica do `rpa-core` (recomendado a partir do momento em que o framework tiver tags publicadas), use a tag no lugar da branch padrão:
+
+```
+rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git@v0.1.0
 ```
 
 ---
 
-## CLI — Criando um projeto
-
-### 1. Inicializar estrutura base
-
-Crie a pasta do projeto, instale o `rpa-core` e rode:
+## Quickstart
 
 ```bash
-mkdir minha-automacao
-cd minha-automacao
-pip install "rpa-core @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
+mkdir minha-automacao && cd minha-automacao
+python3 -m venv venv && source venv/bin/activate   # opcional, recomendado
+
+echo 'rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git' > requirements.txt
+pip install -r requirements.txt
+
 rpa-core init
-```
-
-Por padrão (`--orchestrator none`) o projeto é criado **sem integração com orquestrador**:
-
-```
-minha-automacao/
-├── main.py       # Entry point (sem referências ao Maestro)
-├── settings.py   # Dataclass Settings do projeto (editável)
-├── settings.ini  # Configurações base
-├── services/
-│   └── __init__.py
-└── workflows/
-    └── __init__.py
-```
-
-Para projetos integrados ao **BotCity Maestro**:
-
-```bash
-rpa-core init --orchestrator maestro
-```
-
-Gera o mesmo, mais o `bot.py` (entry point do BotCity Runner) e um `main.py` com integração ao Maestro.
-
-### 2. Criar um workflow
-
-```bash
 rpa-core new-workflow extrator_nfe
 ```
 
-Cria a estrutura do workflow, registra automaticamente no `main.py` e define o `WORKFLOW_NAME` no `bot.py` (apenas no primeiro workflow criado):
-
-```
-workflows/
-└── extrator_nfe/
-    ├── __init__.py
-    ├── extrator_nfe.py   # classe ExtratorNfe com execute()
-    └── tasks/
-        └── __init__.py
-```
-
-### 3. Adicionar uma configuração
-
-```bash
-rpa-core add-setting <secao> <chave> <tipo> <valor_padrao>
-```
-
-Adiciona o campo em `settings.ini` **e** no dataclass `Settings` em `settings.py`, mantendo os dois em sincronia:
-
-```bash
-rpa-core add-setting automation max_retries int 3
-rpa-core add-setting application base_url str https://api.exemplo.com
-rpa-core add-setting automation headless bool false
-```
-
-Tipos disponíveis: `str`, `int`, `float`, `bool`, `path`
-
-### 4. Trocar o workflow do bot
-
-```bash
-rpa-core set-bot-workflow orquestrador
-```
-
-Atualiza o `WORKFLOW_NAME` no `bot.py`. Disponível apenas em projetos criados com `--orchestrator maestro`.
-
----
-
-## Executando
-
-### Sem orquestrador (default)
-
-Tanto em desenvolvimento quanto em produção/Docker, use `main.py` diretamente:
-
-```bash
-python main.py extrator_nfe
-python main.py validador
-```
-
-### Com BotCity Maestro
-
-O BotCity Runner executa o `bot.py`. O `WORKFLOW_NAME` define qual workflow será chamado.
-
-Para rodar localmente sem o Maestro, use `main.py` da mesma forma:
-
-```bash
-python main.py extrator_nfe
-```
-
----
-
-## Estrutura de um Projeto
-
-```
-minha-automacao/
-├── bot.py                          # Apenas com --orchestrator maestro
-├── main.py
-├── settings.py
-├── settings.ini
-├── requirements.txt
-├── services/
-│   └── portal_xyz_login.py         # login compartilhado entre workflows
-├── workflows/
-│   ├── extrator_nfe/
-│   │   ├── extrator_nfe.py         # orquestra as tasks
-│   │   └── tasks/
-│   │       ├── task_01_abrir_site.py
-│   │       ├── task_02_extrair_dados.py
-│   │       └── task_03_salvar.py
-│   └── orquestrador/
-│       └── orquestrador.py         # chama outros workflows se necessário
-└── tests/
-```
-
-### Workflow
+Isso gera a estrutura do projeto e o esqueleto do workflow em `workflows/extrator_nfe/extrator_nfe.py`. Implemente a automação no método `execute()`:
 
 ```python
-# workflows/extrator_nfe/extrator_nfe.py
 from rpa_core import LoggerFactory
 from rpa_core.services.botcity_web_service import BotCityWebService
 from settings import Settings
-from workflows.extrator_nfe.tasks import task_01_abrir_site, task_02_extrair_dados, task_03_salvar
 
 
 class ExtratorNfe:
@@ -187,200 +100,152 @@ class ExtratorNfe:
         bot_service = BotCityWebService(timeout_seconds=self._settings.timeout_seconds, logger=self._logger)
         bot_service.start()
 
-        task_01_abrir_site.executar(self._logger, bot_service)
+        bot_service.bot.navigate_to("https://exemplo.com")
+        self._logger.info("Site aberto com sucesso")
 
-        dados = task_02_extrair_dados.executar(self._logger, bot_service)
-        if not dados:
-            return
-
-        task_03_salvar.executar(self._logger, dados)
+        bot_service.stop()
 ```
 
-### Tasks
+Rode:
 
-```python
-# workflows/extrator_nfe/tasks/task_01_abrir_site.py
-from rpa_core import LoggerFactory
-from rpa_core.services.botcity_web_service import BotCityWebService
-
-URL = "https://exemplo.com"
-
-def executar(logger: LoggerFactory, bot_service: BotCityWebService) -> None:
-    logger.info("Abrindo site", url=URL)
-    bot_service.bot.navigate_to(URL)
+```bash
+python main.py extrator_nfe
 ```
 
-### Services compartilhados
+Precisa de uma configuração nova (URL, credencial, flag)? Adicione com:
 
-```python
-# services/portal_xyz_login.py
-from rpa_core import LoggerFactory
-from rpa_core.services.botcity_web_service import BotCityWebService
-
-def fazer_login(logger: LoggerFactory, bot_service: BotCityWebService, usuario: str, senha: str) -> bool:
-    try:
-        bot_service.bot.navigate_to("https://portal-xyz.com/login")
-        logger.info("Login realizado com sucesso")
-        return True
-    except Exception as e:
-        logger.exception(f"Falha no login: {e}")
-        return False
+```bash
+rpa-core add-setting application base_url str https://api.exemplo.com
 ```
+
+Isso atualiza `settings.ini` e o dataclass `Settings` em `settings.py` ao mesmo tempo — o campo já fica disponível em `self._settings.base_url`.
 
 ---
 
-## Componentes
+## Estrutura de um projeto gerado
+
+```
+minha-automacao/
+├── bot.py            # só com --orchestrator maestro
+├── main.py           # entry point
+├── settings.py       # dataclass Settings (editável, atualizado por add-setting)
+├── settings.ini      # valores de configuração
+├── services/         # services compartilhados entre workflows (ex: login de um sistema)
+└── workflows/
+    └── extrator_nfe/
+        ├── extrator_nfe.py   # classe com execute() — orquestra a automação
+        └── tasks/            # passos da automação, um arquivo por etapa
+```
+
+`services/` e `tasks/` são convenções de organização, não geradas automaticamente com conteúdo — a CLI cria as pastas vazias e você estrutura o código conforme o workflow cresce. Um padrão comum é uma função/classe por etapa em `tasks/`, e tudo que é compartilhado entre dois ou mais workflows (como um login) em `services/`.
+
+---
+
+## Comandos da CLI
+
+| Comando | Faz |
+|---|---|
+| `rpa-core init [--orchestrator none\|maestro]` | Cria a estrutura base do projeto no diretório atual. Default: `none` |
+| `rpa-core new-workflow <nome>` | Cria um workflow e registra automaticamente em `main.py` (e em `bot.py`, se existir) |
+| `rpa-core add-setting <secao> <chave> <tipo> <valor>` | Adiciona um campo a `settings.ini` e `settings.py`. Tipos: `str`, `int`, `float`, `bool`, `path` |
+| `rpa-core set-bot-workflow <nome>` | Define qual workflow o `bot.py` executa. Só disponível em projetos com `--orchestrator maestro` |
+
+Nomes de workflow e de chave de configuração devem estar em `snake_case`.
+
+---
+
+## Executando
+
+Sem orquestrador (default), em desenvolvimento ou produção/Docker:
+
+```bash
+python main.py extrator_nfe
+```
+
+Com BotCity Maestro, o BotCity Runner executa `bot.py`, que por sua vez chama `main.py` internamente — o `WORKFLOW_NAME` definido em `bot.py` decide qual workflow roda. Localmente, `python main.py <workflow>` funciona da mesma forma, com ou sem Maestro.
+
+---
+
+## Conceitos centrais
 
 ### `Settings`
 
-Gerado pelo `rpa-core init` em `settings.py` no próprio projeto. Carrega configurações de `settings.ini` via dataclass frozen com `load()`.
+Dataclass gerado em `settings.py`, carregado de `settings.ini`.
 
 ```python
 from settings import Settings
 
-settings = Settings.load()                        # lê settings.ini na raiz
+settings = Settings.load()                       # lê settings.ini na raiz do projeto
 settings = Settings.load("caminho/settings.ini")  # caminho customizado
 ```
 
-**`settings.ini` base:**
-
-```ini
-[application]
-environment = development
-
-[automation]
-timeout_seconds = 30
-
-[logging]
-level = INFO
-directory = logs
-```
-
----
-
 ### `LoggerFactory`
 
-Logger com saída simultânea no console e em arquivo.
+Logger com saída simultânea no console (colorida) e em arquivo (`logs/YYYYMMDD_HHMMSS.txt`).
 
 ```python
 from rpa_core import LoggerFactory
 
 logger = LoggerFactory()
-logger.info("Mensagem")
-logger.info("Com dados extras", total=150, status="ok")
-logger.warning("Aviso")
-logger.error("Erro")
+logger.info("Mensagem", total=150, status="ok")  # kwargs extras aparecem no log
 logger.exception("Erro com traceback")
 ```
 
-Logs em arquivo são gravados em `logs/YYYYMMDD_HHMMSS.txt`.
-
----
-
 ### `ProcessRunner`
 
-Orquestra o ciclo de vida da execução: loga início, chama `workflow.execute()`, loga sucesso ou erro e propaga exceções.
+Centraliza o ciclo de vida da execução de um workflow: loga início, chama `workflow.execute()`, loga sucesso ou erro, propaga a exceção. Usado internamente pelo `main.py` gerado — raramente é necessário instanciá-lo à mão.
 
 ```python
 from rpa_core import ProcessRunner
 
-# Sem orquestrador
-runner = ProcessRunner(logger=logger)
-
-# Com orquestrador (qualquer objeto que implemente OrchestratorLogger)
-runner = ProcessRunner(logger=logger, orchestrator_logger=maestro_logger)
-
-runner.run(workflow)
+ProcessRunner(logger=logger).run(workflow)
 ```
 
 ---
 
-### `MaestroLogService`
+## Orquestrador (opcional)
 
-Envia logs estruturados ao BotCity Maestro. Requer `rpa-core[maestro]`. Falha silenciosamente se o Maestro não estiver disponível em tempo de execução.
+Por padrão (`--orchestrator none`), o projeto não depende de nenhum orquestrador externo. Para integrar com BotCity Maestro:
 
-```python
-from rpa_core import MaestroLogService
-from botcity.maestro import BotMaestroSDK
-
-maestro = BotMaestroSDK.from_sys_args()
-orchestrator_logger = MaestroLogService(maestro=maestro, process_name="extrator_nfe")
-orchestrator_logger.info("Etapa concluída", step="EXTRACAO")
+```bash
+rpa-core init --orchestrator maestro
+pip install "rpa-core[maestro] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git"
 ```
+
+Isso gera `bot.py` (entry point do BotCity Runner) e conecta o `MaestroLogService` ao `ProcessRunner`, enviando logs estruturados ao Maestro a cada etapa. Se o Maestro estiver inacessível em tempo de execução, o envio de log falha silenciosamente — a automação não é interrompida por isso.
+
+Para integrar com um orquestrador diferente, implemente o protocolo `OrchestratorLogger` (métodos `info`, `warning`, `error`) e passe sua própria classe ao `ProcessRunner` no lugar do `MaestroLogService` — o `rpa-core` não exige Maestro especificamente, só esse contrato.
 
 ---
 
-### `OrchestratorLogger`
+## Services de automação
 
-Protocol que define o contrato do logger de orquestrador (`info`, `warning`, `error`). Use para criar integrações com outros orquestradores sem depender do Maestro.
-
-```python
-from rpa_core import OrchestratorLogger
-
-class MeuOrquestradorLogger:
-    def info(self, message: str, step: str = "-") -> None: ...
-    def warning(self, message: str, step: str = "-") -> None: ...
-    def error(self, message: str, step: str = "-") -> None: ...
-```
-
----
-
-### Services
-
-Services gerenciam o ciclo de vida da ferramenta de automação escolhida. Cada um requer o extra correspondente instalado.
-
-#### BotCity Web
+Cada service encapsula o ciclo de vida (`start()` / `stop()`) de uma ferramenta de automação e expõe o objeto nativo dela para uso direto — sem abstrair a API da ferramenta em si.
 
 ```python
 from rpa_core.services.botcity_web_service import BotCityWebService
 
 service = BotCityWebService(timeout_seconds=30, logger=logger, headless=False)
 service.start()
-service.bot.navigate_to("https://exemplo.com")
+service.bot.navigate_to("https://exemplo.com")  # objeto WebBot nativo do BotCity
 service.stop()
 ```
 
-#### BotCity Core (desktop)
+| Service | Extra | Construtor | Objeto nativo |
+|---|---|---|---|
+| `BotCityWebService` | `botcity-web` | `timeout_seconds, logger, headless=False` | `.bot` (BotCity `WebBot`) |
+| `BotCityCoreService` | `botcity-core` | `logger` | `.bot` (BotCity `DesktopBot`) |
+| `SeleniumService` | `selenium` | `timeout_seconds, logger, headless=False` | `.driver` (Selenium `WebDriver`) |
+| `PlaywrightService` | `playwright` | `timeout_seconds, logger, headless=False` | `.page` (Playwright `Page`) |
 
-```python
-from rpa_core.services.botcity_core_service import BotCityCoreService
-
-service = BotCityCoreService(logger=logger)
-service.start()
-service.bot.find("elemento", matching=0.97)
-service.stop()
-```
-
-#### Selenium
-
-```python
-from rpa_core.services.selenium_service import SeleniumService
-
-service = SeleniumService(timeout_seconds=30, logger=logger, headless=False)
-service.start()
-service.driver.get("https://exemplo.com")
-service.stop()
-```
-
-#### Playwright
-
-```python
-from rpa_core.services.playwright_service import PlaywrightService
-
-service = PlaywrightService(timeout_seconds=30, logger=logger, headless=False)
-service.start()
-service.page.goto("https://exemplo.com")
-service.stop()
-```
+Instanciar um service sem o extra correspondente instalado levanta `ImportError` com a instrução de instalação.
 
 ---
 
-## Extras disponíveis
+## Testes
 
-| Extra | Instala | Uso |
-|---|---|---|
-| `maestro` | `botcity-maestro-sdk` | Integração com BotCity Maestro Orchestrator |
-| `botcity-web` | `botcity-framework-web` | Automação de browser via BotCity WebBot |
-| `botcity-core` | `botcity-framework-core` | Automação desktop via BotCity DesktopBot |
-| `selenium` | `selenium` | Automação de browser via Selenium WebDriver |
-| `playwright` | `playwright` | Automação de browser via Playwright |
+```bash
+pip install -e ".[botcity-web,botcity-core,selenium,playwright,maestro]"
+pip install pytest
+pytest
+```
