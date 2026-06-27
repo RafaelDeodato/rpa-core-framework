@@ -62,7 +62,7 @@ pip install -r requirements.txt
 
 Isso garante que qualquer ambiente — sua máquina, um container Docker, um pipeline de CI — instala exatamente o mesmo conjunto de dependências, em vez de depender de comandos rodados manualmente.
 
-Para travar numa versão específica do `rpa-core` (recomendado a partir do momento em que o framework tiver tags publicadas), use a tag no lugar da branch padrão:
+Para travar numa versão específica do `rpa-core` (recomendado para produção), use a tag no lugar da branch padrão. A versão mais recente publicada é a `v0.1.0`:
 
 ```
 rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git@v0.1.0
