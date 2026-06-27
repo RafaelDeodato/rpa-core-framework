@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rpa-core"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "botcity-maestro-sdk==0.9.0",
+]
+
+[project.optional-dependencies]
+botcity-web  = ["botcity-framework-web==1.1.0"]
+botcity-core = ["botcity-framework-core==1.1.0"]
+selenium     = ["selenium>=4.0"]
+playwright   = ["playwright>=1.40"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
