@@ -1,0 +1,9 @@
+[application]
+environment = development
+
+[automation]
+timeout_seconds = 30
+
+[logging]
+level = INFO
+directory = logs

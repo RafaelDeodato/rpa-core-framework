@@ -1,0 +1,11 @@
+from rpa_core import LoggerFactory
+from settings import Settings
+
+
+class {classe}:
+    def __init__(self, logger: LoggerFactory, settings: Settings) -> None:
+        self._logger = logger
+        self._settings = settings
+
+    def execute(self) -> None:
+        pass

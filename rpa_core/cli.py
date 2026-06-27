@@ -3,194 +3,20 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from importlib import resources
 from pathlib import Path
 
 # --- templates ---
 
-_BOT_PY = '''\
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+def _carregar_template(nome: str) -> str:
+    return resources.files("rpa_core.templates").joinpath(nome).read_text(encoding="utf-8")
 
-from botcity.maestro import AutomationTaskFinishStatus, BotMaestroSDK
-from main import main
-
-WORKFLOW_NAME = ""
-
-
-def bot_main() -> None:
-    maestro = BotMaestroSDK.from_sys_args()
-
-    try:
-        execution = maestro.get_execution()
-        print(f"[INFO] Execução via Orquestrador | Task ID: {execution.task_id}")
-    except Exception:
-        execution = None
-        print("[INFO] Execução local detectada")
-
-    try:
-        main(workflow_name=WORKFLOW_NAME, maestro=maestro)
-
-        if execution:
-            maestro.finish_task(
-                task_id=execution.task_id,
-                status=AutomationTaskFinishStatus.SUCCESS,
-                message="Task finalizada com sucesso",
-            )
-
-    except Exception as exc:
-        if execution:
-            maestro.finish_task(
-                task_id=execution.task_id,
-                status=AutomationTaskFinishStatus.FAILED,
-                message=str(exc),
-            )
-        raise
-
-
-if __name__ == "__main__":
-    bot_main()
-'''
-
-_MAIN_PY_NONE = '''\
-import argparse
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-from settings import Settings
-from rpa_core import LoggerFactory, ProcessRunner
-
-# [rpa-core] imports dos workflows
-WORKFLOWS = {
-    # [rpa-core] registro dos workflows
-}
-
-
-def main(workflow_name: str | None = None) -> None:
-    if workflow_name is None:
-        parser = argparse.ArgumentParser(description="Executor de workflows RPA")
-        parser.add_argument("workflow", choices=list(WORKFLOWS.keys()), help="Nome do workflow")
-        workflow_name = parser.parse_args().workflow
-
-    settings = Settings.load()
-    logger = LoggerFactory(log_directory=settings.log_directory)
-
-    workflow = WORKFLOWS[workflow_name](
-        logger=logger,
-        settings=settings,
-    )
-
-    ProcessRunner(logger=logger).run(workflow)
-
-
-if __name__ == "__main__":
-    main()
-'''
-
-_MAIN_PY_MAESTRO = '''\
-import argparse
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-from botcity.maestro import BotMaestroSDK
-from settings import Settings
-from rpa_core import LoggerFactory, MaestroLogService, ProcessRunner
-
-# [rpa-core] imports dos workflows
-WORKFLOWS = {
-    # [rpa-core] registro dos workflows
-}
-
-
-def main(workflow_name: str | None = None, maestro: BotMaestroSDK | None = None) -> None:
-    if workflow_name is None:
-        parser = argparse.ArgumentParser(description="Executor de workflows RPA")
-        parser.add_argument("workflow", choices=list(WORKFLOWS.keys()), help="Nome do workflow")
-        workflow_name = parser.parse_args().workflow
-
-    settings = Settings.load()
-    logger = LoggerFactory(log_directory=settings.log_directory)
-
-    if maestro is None:
-        BotMaestroSDK.RAISE_NOT_CONNECTED = False
-        maestro = BotMaestroSDK.from_sys_args()
-
-    orchestrator_logger = MaestroLogService(maestro=maestro, process_name=workflow_name)
-
-    workflow = WORKFLOWS[workflow_name](
-        logger=logger,
-        settings=settings,
-    )
-
-    ProcessRunner(logger=logger, orchestrator_logger=orchestrator_logger).run(workflow)
-
-
-if __name__ == "__main__":
-    main()
-'''
-
-_SETTINGS_PY = '''\
-from __future__ import annotations
-
-from configparser import ConfigParser, Error as ConfigParserError
-from dataclasses import dataclass
-from pathlib import Path
-
-DEFAULT_SETTINGS_PATH = Path(__file__).parent / "settings.ini"
-
-
-@dataclass(frozen=True)
-class Settings:
-    environment: str
-    timeout_seconds: int
-    log_level: str
-    log_directory: Path
-    # [rpa-core] campos adicionais
-
-    @classmethod
-    def load(cls, path: str | Path | None = None) -> "Settings":
-        settings_path = Path(path) if path else DEFAULT_SETTINGS_PATH
-        if not settings_path.is_file():
-            raise FileNotFoundError(f"settings.ini não encontrado em: {settings_path}")
-        parser = ConfigParser()
-        if not parser.read(settings_path, encoding="utf-8"):
-            raise ValueError(f"Não foi possível ler: {settings_path}")
-        try:
-            return cls(
-                environment=parser.get("application", "environment"),
-                timeout_seconds=parser.getint("automation", "timeout_seconds"),
-                log_level=parser.get("logging", "level").upper(),
-                log_directory=Path(parser.get("logging", "directory")),
-                # [rpa-core] leitura dos campos adicionais
-            )
-        except (ConfigParserError, KeyError, ValueError) as exc:
-            raise ValueError(f"Erro ao carregar settings.ini: {exc}") from exc
-'''
-
-_SETTINGS_INI = '''\
-[application]
-environment = development
-
-[automation]
-timeout_seconds = 30
-
-[logging]
-level = INFO
-directory = logs
-'''
-
-_WORKFLOW_PY = '''\
-from rpa_core import LoggerFactory
-from settings import Settings
-
-
-class {classe}:
-    def __init__(self, logger: LoggerFactory, settings: Settings) -> None:
-        self._logger = logger
-        self._settings = settings
-
-    def execute(self) -> None:
-        pass
-'''
+_BOT_PY          = _carregar_template("bot.py.template")
+_MAIN_PY_NONE    = _carregar_template("main_none.py.template")
+_MAIN_PY_MAESTRO = _carregar_template("main_maestro.py.template")
+_SETTINGS_PY     = _carregar_template("settings.py.template")
+_SETTINGS_INI    = _carregar_template("settings.ini.template")
+_WORKFLOW_PY     = _carregar_template("workflow.py.template")
 
 # --- tipos suportados para add-setting ---
 

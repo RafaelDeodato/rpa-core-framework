@@ -15,6 +15,9 @@ botcity-core = ["botcity-framework-core==1.1.0"]
 selenium     = ["selenium>=4.0"]
 playwright   = ["playwright>=1.40"]
 
+[tool.setuptools.package-data]
+"rpa_core.templates" = ["*.template"]
+
 [project.scripts]
 rpa-core = "rpa_core.cli:main"
 

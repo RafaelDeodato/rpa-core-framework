@@ -1,0 +1,41 @@
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+from botcity.maestro import AutomationTaskFinishStatus, BotMaestroSDK
+from main import main
+
+WORKFLOW_NAME = ""
+
+
+def bot_main() -> None:
+    maestro = BotMaestroSDK.from_sys_args()
+
+    try:
+        execution = maestro.get_execution()
+        print(f"[INFO] Execução via Orquestrador | Task ID: {execution.task_id}")
+    except Exception:
+        execution = None
+        print("[INFO] Execução local detectada")
+
+    try:
+        main(workflow_name=WORKFLOW_NAME, maestro=maestro)
+
+        if execution:
+            maestro.finish_task(
+                task_id=execution.task_id,
+                status=AutomationTaskFinishStatus.SUCCESS,
+                message="Task finalizada com sucesso",
+            )
+
+    except Exception as exc:
+        if execution:
+            maestro.finish_task(
+                task_id=execution.task_id,
+                status=AutomationTaskFinishStatus.FAILED,
+                message=str(exc),
+            )
+        raise
+
+
+if __name__ == "__main__":
+    bot_main()

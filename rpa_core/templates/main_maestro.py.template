@@ -1,0 +1,39 @@
+import argparse
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+from botcity.maestro import BotMaestroSDK
+from settings import Settings
+from rpa_core import LoggerFactory, MaestroLogService, ProcessRunner
+
+# [rpa-core] imports dos workflows
+WORKFLOWS = {
+    # [rpa-core] registro dos workflows
+}
+
+
+def main(workflow_name: str | None = None, maestro: BotMaestroSDK | None = None) -> None:
+    if workflow_name is None:
+        parser = argparse.ArgumentParser(description="Executor de workflows RPA")
+        parser.add_argument("workflow", choices=list(WORKFLOWS.keys()), help="Nome do workflow")
+        workflow_name = parser.parse_args().workflow
+
+    settings = Settings.load()
+    logger = LoggerFactory(log_directory=settings.log_directory)
+
+    if maestro is None:
+        BotMaestroSDK.RAISE_NOT_CONNECTED = False
+        maestro = BotMaestroSDK.from_sys_args()
+
+    orchestrator_logger = MaestroLogService(maestro=maestro, process_name=workflow_name)
+
+    workflow = WORKFLOWS[workflow_name](
+        logger=logger,
+        settings=settings,
+    )
+
+    ProcessRunner(logger=logger, orchestrator_logger=orchestrator_logger).run(workflow)
+
+
+if __name__ == "__main__":
+    main()
