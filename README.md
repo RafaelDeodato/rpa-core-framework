@@ -20,6 +20,7 @@ A ferramenta de automação (BotCity, Selenium, Playwright) e o orquestrador (Bo
 - [Orquestrador (opcional)](#orquestrador-opcional)
 - [Services de automação](#services-de-automação)
 - [Testes](#testes)
+- [Indo além: framework por cliente](#indo-além-framework-por-cliente)
 
 ---
 
@@ -249,3 +250,15 @@ pip install -e ".[botcity-web,botcity-core,selenium,playwright,maestro]"
 pip install pytest
 pytest
 ```
+
+---
+
+## Indo além: framework por cliente
+
+Quando uma automação cresce para múltiplos workflows de um mesmo cliente — com logins, clients de API internas ou regras de negócio compartilhadas entre eles — vale extrair esse código para um pacote próprio, em vez de adicionar lógica específica de cliente dentro do `rpa-core` (que deve continuar genérico). Esse pacote declara `rpa-core` como dependência, do mesmo jeito mostrado em [Em um projeto real](#em-um-projeto-real-requirementstxt):
+
+```
+rpa-core[botcity-web] @ git+https://github.com/RafaelDeodato/rpa-core-framework.git@v0.1.0
+```
+
+Cada cliente ganha seus próprios services compartilhados entre workflows, e continua se beneficiando de atualizações do `rpa-core` ao avançar a tag fixada.
